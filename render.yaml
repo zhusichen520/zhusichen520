@@ -3,7 +3,7 @@ services:
     name: shiguang-phone
     runtime: python
     plan: starter
-    buildCommand: python3 -m py_compile server.py
+    buildCommand: python3 -m py_compile server.py && python3 make_demo.py && python3 make_bundle.py
     startCommand: python3 server.py
     healthCheckPath: /api/status
     envVars:

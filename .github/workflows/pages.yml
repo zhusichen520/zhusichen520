@@ -21,11 +21,14 @@ jobs:
         uses: actions/checkout@v4
       - name: Prepare static website
         run: |
+          python3 make_demo.py
+          python3 make_bundle.py
           mkdir _site
-          cp index.html studio.html play.html app.js style.css portal.js manifest.webmanifest app-icon.svg kun-template.json .nojekyll _site/
+          cp demo.html demo.webmanifest demo-story.js index.html studio.html play.html app.js style.css portal.js manifest.webmanifest app-icon.svg kun-template.json mom-template.json experience.js experience.css local-ollama.zip .nojekyll _site/
           test -s _site/index.html
           test -s _site/studio.html
           node --check _site/app.js
+          node --check _site/experience.js
       - name: Upload website
         uses: actions/upload-pages-artifact@v3
         with:
