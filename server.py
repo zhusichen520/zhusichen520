@@ -12,7 +12,7 @@ with sqlite3.connect(DB) as db:
 with sqlite3.connect(DB) as db:
     if 'provider' not in [r[1] for r in db.execute('PRAGMA table_info(model_settings)')]:
         db.execute("ALTER TABLE model_settings ADD COLUMN provider TEXT DEFAULT 'openai'")
-SESSIONS={}; LIMITS={}; LOCK=threading.Lock()
+SESSIONS={}; LIMITS={}; LOCK=threading.Lock(); BOOTSTRAP_USED=False
 def read():
     with sqlite3.connect(DB) as db:
         row=db.execute('SELECT draft,published FROM content WHERE id=1').fetchone()
@@ -55,6 +55,8 @@ class Handler(BaseHTTPRequestHandler):
     def authorized(self):
         token=next((v.split('=',1)[1] for v in self.headers.get('Cookie','').split('; ') if v.startswith('author=')),'')
         return SESSIONS.get(token,0)>time.time()
+    def local_setup(self):
+        return os.getenv('LOCAL_LAUNCHER')=='1' and self.client_address[0] in ['127.0.0.1','::1'] and self.headers.get('Host','').split(':')[0] in ['127.0.0.1','localhost']
     def body(self):
         if self.headers.get('Content-Type','').split(';')[0]!='application/json': raise ValueError()
         length=int(self.headers.get('Content-Length',0))
@@ -69,13 +71,30 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path=self.path.split('?')[0]
         if path=='/api/status':return self.send(200,{'server':True,'authorConfigured':bool(os.getenv('AUTHOR_PASSWORD')),'authenticated':self.authorized(),'aiConfigured':bool(model_config()[0]) or model_provider()=='ollama','aiProvider':model_provider(),'aiModel':model_config()[1],'aiSource':model_config()[2]})
+        if path=='/api/backup':
+            if not self.authorized():return self.send(401,{'error':'请先登录作者账号'})
+            draft,published=read();return self.send(200,{'version':1,'draft':draft,'published':published})
+        if path=='/api/local/status':
+            if not self.local_setup() or not self.authorized():return self.send(403,{'error':'请从本机启动窗口打开设置页'})
+            from local_connection import lan_addresses
+            draft,published=read();port=self.server.server_address[1]
+            return self.send(200,{'configured':os.getenv('LOCAL_CONFIGURED')=='1','model':model_config()[1],'draft':{'title':draft.get('title',''),'hasWallpaper':bool(draft.get('wallpaper')),'photos':len(draft.get('photos',[])),'contacts':len(draft.get('contacts',[]))} if draft else None,'published':published is not None,'authorURL':f'http://127.0.0.1:{port}/studio.html?fromServer=1','playerURL':f'http://127.0.0.1:{port}/play.html','phones':[{'label':x['label'],'url':f'http://{x["ip"]}:{port}/play.html'} for x in lan_addresses()]})
+        if path=='/api/local/models':
+            if not self.local_setup() or not self.authorized():return self.send(403,{'error':'仅本机作者设置页可用'})
+            from local_connection import local_models
+            try:
+                base=os.getenv('OLLAMA_BASE_URL','http://127.0.0.1:11434/v1').rstrip('/')
+                if base.endswith('/v1'):base=base[:-3]
+                if urllib.parse.urlparse(base).hostname not in ['127.0.0.1','localhost','::1']:return self.send(400,{'error':'本机向导需要连接这台电脑上的 Ollama'})
+                return self.send(200,{'models':local_models(base)})
+            except Exception:return self.send(503,{'error':'没连上 Ollama。请打开 Ollama，在 Chat 中确认本地模型能回复，然后点重新检测。'})
         if path=='/api/draft':
             if not self.authorized():return self.send(401,{'error':'请先登录作者账号'})
             return self.send(200,{'draft':read()[0]})
         if path=='/api/story':
             d=read()[1]
             return self.send(200,{'story':public(d)}) if d else self.send(404,{'error':'作者尚未发布故事'})
-        files={'/':'index.html','/index.html':'index.html','/demo.html':'demo.html','/demo.webmanifest':'demo.webmanifest','/demo-story.js':'demo-story.js','/studio.html':'studio.html','/play.html':'play.html','/app.js':'app.js','/style.css':'style.css','/portal.js':'portal.js','/manifest.webmanifest':'manifest.webmanifest','/app-icon.svg':'app-icon.svg','/kun-template.json':'kun-template.json','/mom-template.json':'mom-template.json','/experience.js':'experience.js','/daily.js':'daily.js','/daily.css':'daily.css','/help-ollama.html':'help-ollama.html','/help.css':'help.css','/experience.css':'experience.css','/local-ollama.zip':'local-ollama.zip'}
+        files={'/':'index.html','/index.html':'index.html','/demo.html':'demo.html','/demo.webmanifest':'demo.webmanifest','/demo-story.js':'demo-story.js','/studio.html':'studio.html','/play.html':'play.html','/app.js':'app.js','/style.css':'style.css','/portal.js':'portal.js','/manifest.webmanifest':'manifest.webmanifest','/app-icon.svg':'app-icon.svg','/kun-template.json':'kun-template.json','/mom-template.json':'mom-template.json','/experience.js':'experience.js','/setup.html':'setup.html','/setup.js':'setup.js','/migrate.js':'migrate.js','/daily.js':'daily.js','/daily.css':'daily.css','/help-ollama.html':'help-ollama.html','/help.css':'help.css','/experience.css':'experience.css','/local-ollama.zip':'local-ollama.zip'}
         name=files.get(path)
         if not name:return self.send(404,{'error':'未找到'})
         import mimetypes
@@ -87,6 +106,35 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:self.send(500,{'error':'服务器暂时无法处理，请稍后重试'})
     def post(self):
         path=self.path; b=self.body()
+        if path=='/api/local/bootstrap':
+            global BOOTSTRAP_USED
+            if not self.local_setup():return self.send(403,{'error':'仅电脑本机可以进行初始设置'})
+            token=str(b.get('token',''));expected=os.getenv('LOCAL_SETUP_TOKEN','')
+            with LOCK:
+                if not expected or BOOTSTRAP_USED or not hmac.compare_digest(token,expected):return self.send(403,{'error':'启动凭据已失效。请使用作者密码登录，或关闭启动窗口后重新打开。'})
+                BOOTSTRAP_USED=True
+            session=secrets.token_urlsafe(32);SESSIONS[session]=time.time()+12*3600
+            self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Set-Cookie',f'author={session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200');self.end_headers();self.wfile.write(b'{}');return
+        if path in ['/api/local/test','/api/local/config']:
+            if not self.local_setup() or not self.authorized():return self.send(403,{'error':'请从电脑的本机设置页操作'})
+            from local_connection import local_models,test_model
+            model=b.get('model','')
+            try:
+                base=os.getenv('OLLAMA_BASE_URL','http://127.0.0.1:11434/v1').rstrip('/')
+                if base.endswith('/v1'):base=base[:-3]
+                if urllib.parse.urlparse(base).hostname not in ['127.0.0.1','localhost','::1']:return self.send(400,{'error':'本机向导只支持本机 Ollama'})
+                if model not in local_models(base):return self.send(400,{'error':'请选择列表中已下载的本地模型'})
+            except Exception:return self.send(503,{'error':'Ollama 尚未启动或无法连接，请先确认它能聊天'})
+            if path=='/api/local/test':
+                try:
+                    reply=test_model(model,base);os.environ['LOCAL_TESTED_MODEL']=model
+                    return self.send(200,{'reply':reply,'model':model})
+                except Exception:return self.send(502,{'error':'没有收到有效回复。先在 Ollama Chat 中选同一个模型发“你好”，确认能回复后再试。'})
+            password=b.get('password','')
+            if model!=os.getenv('LOCAL_TESTED_MODEL'):return self.send(400,{'error':'请先点“测试 AI”，确认该模型实际回复'})
+            if not isinstance(password,str) or not 6<=len(password)<=128:return self.send(400,{'error':'作者密码请设置为 6—128 个字符'})
+            os.environ.update(AUTHOR_PASSWORD=password,MODEL_PROVIDER='ollama',MODEL_NAME=model,LOCAL_CONFIGURED='1')
+            return self.send(200,{'configured':True})
         if path=='/api/login':
             if self.limited(('login',self.client_address[0]),5):return self.send(429,{'error':'尝试过于频繁，请一分钟后重试'})
             password=os.environ.get('AUTHOR_PASSWORD','')
@@ -122,6 +170,7 @@ class Handler(BaseHTTPRequestHandler):
                 with sqlite3.connect(DB) as db:db.execute('UPDATE content SET published=? WHERE id=1',(json.dumps(d),))
             return self.send(200,{'ok':True,'url':'play.html'})
         if path=='/api/chat':
+            if os.getenv('LOCAL_LAUNCHER')=='1' and os.getenv('LOCAL_CONFIGURED')!='1':return self.send(503,{'error':'请先在电脑的本机设置页完成模型测试和作者密码设置'})
             if self.limited(('chat',self.client_address[0]),10) or self.limited('global-chat',60):return self.send(429,{'error':'对话较多，请稍后再试'})
             key,model,_=model_config();d=read()[1]
             if not key and model_provider()!='ollama':return self.send(503,{'error':'作者还没有连接 AI 服务，暂时可体验预设剧情'})
