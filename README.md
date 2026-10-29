@@ -2,7 +2,15 @@
 
 手机优先的本地互动叙事创作工具，无第三方运行依赖。
 
-## 启动
+## 浏览器直接访问（推荐）
+
+本项目可直接使用 GitHub Pages，无需安装 Python、Anaconda 或其他软件。
+
+仓库 Settings → Pages → Build and deployment：Source 选择 Deploy from a branch，Branch 选择 main，目录选择 / (root)，点击 Save。首次部署完成后访问 https://zhusichen520.github.io/zhusichen520/ 。后续推送 main 会自动更新网站。
+
+此地址需要先在仓库中启用 Pages，源码推送本身不会自动开通网站。
+
+## 本地开发启动（仅开发者需要）
 
 ```sh
 cd /workspace/zhusichen520
