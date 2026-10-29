@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: shiguang-phone
+    runtime: python
+    plan: starter
+    buildCommand: python3 -m py_compile server.py
+    startCommand: python3 server.py
+    healthCheckPath: /api/status
+    envVars:
+      - key: AUTHOR_PASSWORD
+        sync: false
+      - key: STORY_DB
+        value: /var/data/story.db
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: MODEL_API_KEY
+        sync: false
+      - key: MODEL_NAME
+        value: gpt-4.1-mini
+    disk:
+      name: story-data
+      mountPath: /var/data
+      sizeGB: 1
