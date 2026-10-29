@@ -13,8 +13,6 @@ services:
         value: /var/data/story.db
       - key: COOKIE_SECURE
         value: "1"
-      - key: MODEL_API_KEY
-        sync: false
       - key: MODEL_NAME
         value: gpt-4.1-mini
     disk:

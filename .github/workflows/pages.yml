@@ -22,7 +22,7 @@ jobs:
       - name: Prepare static website
         run: |
           mkdir _site
-          cp index.html studio.html play.html app.js style.css portal.js manifest.webmanifest app-icon.svg .nojekyll _site/
+          cp index.html studio.html play.html app.js style.css portal.js manifest.webmanifest app-icon.svg kun-template.json .nojekyll _site/
           test -s _site/index.html
           test -s _site/studio.html
           node --check _site/app.js

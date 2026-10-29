@@ -27,6 +27,15 @@ class ServerTest(unittest.TestCase):
   self.assertEqual(cm.exception.code,401)
   with self.assertRaises(urllib.error.HTTPError) as cm:self.call('/api/chat',{'contact':'c1','messages':[{'role':'user','content':'你好'}]})
   self.assertEqual(cm.exception.code,503)
+ def test_ai_credentials_are_author_only_and_not_returned(self):
+  with self.assertRaises(urllib.error.HTTPError) as cm:self.call('/api/ai-config',{'apiKey':'test-only-placeholder','model':'gpt-4.1-mini'})
+  self.assertEqual(cm.exception.code,401)
+  self.call('/api/login',{'password':'test-only-password'})
+  result=self.call('/api/ai-config',{'apiKey':'test-only-placeholder','model':'gpt-4.1-mini'})
+  self.assertEqual(result,{'configured':True})
+  status=self.call('/api/status');self.assertTrue(status['aiConfigured']);self.assertNotIn('test-only-placeholder',json.dumps(status))
+  self.call('/api/ai-config',{'remove':True});self.assertFalse(self.call('/api/status')['aiConfigured'])
+  self.call('/api/logout',{})
  def test_no_private_files(self):
   for path in ['/server.py','/.env','/README.md','/../server.py']:
    with self.assertRaises(urllib.error.HTTPError) as cm:self.call(path)
