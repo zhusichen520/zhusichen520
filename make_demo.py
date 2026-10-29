@@ -1,5 +1,5 @@
 """Build a public, fictional UI demo; never read author drafts or credentials."""
-import json,base64
+import json,base64,io,wave,math,struct
 from pathlib import Path
 ROOT=Path(__file__).parent
 def build():
@@ -11,6 +11,16 @@ def build():
         svg=f'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="{a}"/><stop offset="1" stop-color="{b}"/></linearGradient></defs><rect width="600" height="800" fill="url(#g)"/><circle cx="400" cy="230" r="110" fill="#fff" opacity=".15"/><path d="M0 560 Q220 350 600 650V800H0Z" fill="#fff" opacity=".13"/><text x="55" y="620" fill="white" font-size="70" font-family="sans-serif">{label}</text><text x="58" y="680" fill="white" opacity=".7" font-size="18" font-family="sans-serif">STORY JOURNAL · DEMO</text></svg>'
         photos.append({'id':f'demo-photo-{i}','title':'演示素材 · '+label,'src':'data:image/svg+xml;base64,'+base64.b64encode(svg.encode()).decode(),'time':'昨天'})
     d={'storyId':'public-phone-demo-v3','phoneVersion':3,'title':'陌生人协议 · 手机演示','owner':'雨昕','date':'7月24日 星期五','time':'22:05','password':'420802','quote':'有些话，留在手机里。','wallpaper':'','theme':'#6e8978','names':{'chat':'微信','album':'照片','notes':'备忘录','settings':'设置','moments':'朋友圈','ins':'ins','redbook':'小红书'},'contacts':[kun,mom],'photos':photos,'notes':[{'id':'demo-note-1','title':'给自己的一点提醒','text':'关心不等于原谅。\n想说的话，等自己准备好了再说。','time':'今天 21:30','pinned':True},{'id':'demo-note-2','title':'周末回家','text':'给妈妈带一束花。\n把护膝收进包里。\n有空就好好吃一顿饭。','time':'昨天 18:20'}], 'moments':[{'id':'demo-moment-1','title':'妈妈','author':'妈妈','text':'今天汤煮多了一碗。\n谁要回家吃饭，自己说啊。','time':'32分钟前','images':[p['src'] for p in photos[:3]],'likes':['雨昕'],'comments':[{'author':'雨昕','text':'周末就回来，谢谢妈妈。'}]},{'id':'demo-moment-2','title':'雨昕','text':'把生活调回慢一点的速度。','time':'昨天','images':[photos[2]['src']],'comments':[]}], 'ins':[{'id':'demo-ins','title':'yuxin','author':'yuxin','text':'练习结束，给自己一点慢下来的时间。','images':[photos[2]['src'],photos[3]['src']],'time':'昨天','comments':[]}], 'redbook':[{'id':'demo-red-1','title':'排练包里的小清单','author':'雨昕的日常','text':'护膝、充电线、水杯。还有妈妈装进来的那一小袋零食。\n\n本条为虚构演示笔记。','images':[photos[1]['src']],'time':'今天','comments':[]},{'id':'demo-red-2','title':'下班之后，慢慢回家','author':'日常记录','text':'留一点时间给自己。','images':[photos[4]['src']],'time':'昨天','comments':[]}], 'intro':{'enabled':True,'title':'捡到一部手机','text':'向上滑动后，输入六位剧情密码 420802。\n\n这是界面演示：包含 KUN、妈妈和少量演示素材，不读取你的作者草稿。所有人物关系、日期与事件均为架空同人，与现实艺人及家庭无关。\n\n演示页不连接 AI；真实角色对话可使用你电脑上的 Ollama 本机版。','button':'上滑，打开手机'},'notification':{'app':'chat','text':'妈妈：水喝两口，别的等你有空再说。','contactId':mom['id']},'profiles':{'moments':{'name':'雨昕','signature':'给生活留一点慢下来的时间。','cover':photos[0]['src']}}}
+    sound=io.BytesIO()
+    with wave.open(sound,'wb') as w:
+        w.setnchannels(1);w.setsampwidth(2);w.setframerate(16000)
+        w.writeframes(b''.join(struct.pack('<h',int(2200*math.sin(2*math.pi*[440,554.37,659.25,554.37][i//4000]*i/16000)*min(1,(i%4000)/200,(4000-i%4000)/200))) for i in range(16000)))
+    d['names'].update(phone='电话',sms='信息',music='音乐',calendar='日历',calculator='计算器')
+    d['callRecords']=[{'id':'demo-call','name':'妈妈','time':'今天 19:20','kind':'missed'}]
+    d['sms']=[{'id':'demo-sms','name':'行程提醒','messages':[{'id':'s1','side':'them','text':'演示提醒：你有一条待查看的行程备忘。','time':'今天 18:10'},{'id':'s2','side':'me','text':'收到，我晚点查看。','time':'18:12'}]}]
+    d['tracks']=[{'id':'demo-tone','title':'晚安提示音（演示）','artist':'本机演示音频','cover':photos[3]['src'],'src':'data:audio/wav;base64,'+base64.b64encode(sound.getvalue()).decode()}]
+    d['events']=[{'id':'demo-event','title':'回家吃饭','date':'2026-07-24','time':'19:00','place':'故事里的家','notes':'给妈妈带一束花。'}]
+    d['calendarDate']='2026-07-24'
     text=json.dumps(d,ensure_ascii=False).replace('<','\\u003c')
     (ROOT/'demo-story.js').write_text('window.__EXPERIENCE__=true;window.__STORY__='+text+';\n')
 if __name__=='__main__':build()

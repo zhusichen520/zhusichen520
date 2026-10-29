@@ -1,5 +1,5 @@
 """Shiguang author/player server. Python standard library only."""
-import os, json, sqlite3, secrets, time, threading, hmac, urllib.request, urllib.error, re
+import os, json, sqlite3, secrets, time, threading, hmac, urllib.request, urllib.error, urllib.parse, re
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ROOT=Path(__file__).parent
@@ -75,7 +75,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/story':
             d=read()[1]
             return self.send(200,{'story':public(d)}) if d else self.send(404,{'error':'作者尚未发布故事'})
-        files={'/':'index.html','/index.html':'index.html','/demo.html':'demo.html','/demo.webmanifest':'demo.webmanifest','/demo-story.js':'demo-story.js','/studio.html':'studio.html','/play.html':'play.html','/app.js':'app.js','/style.css':'style.css','/portal.js':'portal.js','/manifest.webmanifest':'manifest.webmanifest','/app-icon.svg':'app-icon.svg','/kun-template.json':'kun-template.json','/mom-template.json':'mom-template.json','/experience.js':'experience.js','/experience.css':'experience.css','/local-ollama.zip':'local-ollama.zip'}
+        files={'/':'index.html','/index.html':'index.html','/demo.html':'demo.html','/demo.webmanifest':'demo.webmanifest','/demo-story.js':'demo-story.js','/studio.html':'studio.html','/play.html':'play.html','/app.js':'app.js','/style.css':'style.css','/portal.js':'portal.js','/manifest.webmanifest':'manifest.webmanifest','/app-icon.svg':'app-icon.svg','/kun-template.json':'kun-template.json','/mom-template.json':'mom-template.json','/experience.js':'experience.js','/daily.js':'daily.js','/daily.css':'daily.css','/help-ollama.html':'help-ollama.html','/help.css':'help.css','/experience.css':'experience.css','/local-ollama.zip':'local-ollama.zip'}
         name=files.get(path)
         if not name:return self.send(404,{'error':'未找到'})
         import mimetypes
@@ -140,7 +140,8 @@ class Handler(BaseHTTPRequestHandler):
             if key:headers['Authorization']='Bearer '+key
             req=urllib.request.Request(base.rstrip('/')+'/chat/completions',data=payload,headers=headers)
             try:
-                with urllib.request.urlopen(req,timeout=120) as response:reply=json.load(response)['choices'][0]['message']['content']
+                opener=urllib.request.build_opener(urllib.request.ProxyHandler({})) if model_provider()=='ollama' and urllib.parse.urlparse(base).hostname in ['127.0.0.1','localhost','::1'] else urllib.request.build_opener()
+                with opener.open(req,timeout=120) as response:reply=json.load(response)['choices'][0]['message']['content']
             except Exception:return self.send(502,{'error':'AI 服务连接失败：Ollama 请检查本机服务和模型是否已启动；云端 API 请检查配置与额度'})
             return self.send(200,{'reply':reply})
         self.send(404,{'error':'未找到'})
